@@ -1,0 +1,1 @@
+put images "jpeg , jpg , png , bmp" here (optionally)
