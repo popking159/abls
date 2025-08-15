@@ -2,6 +2,7 @@
 # AdvancedBootLogoSwapper Plugin Installer
 # Version: 1.0.0
 # Author: MNASR
+# wget -q --no-check-certificate https://raw.githubusercontent.com/popking159/abls/main/installer.sh -O - | /bin/sh
 
 echo "Starting installation..."
 
