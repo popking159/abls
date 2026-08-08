@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# wget -qO - https://raw.githubusercontent.com/popking159/abls/refs/heads/main/myinstaller.sh | /bin/sh
+
 # =========================================================================
 # CONFIGURATION (Change these for different repositories)
 # =========================================================================
@@ -25,6 +27,10 @@ TMP_DIR="/var/volatile/tmp"
 [ -d "$TMP_DIR" ] || TMP_DIR="/tmp"
 TMP_FILE="$TMP_DIR/main_install.tar.gz"
 
+# Plugin paths for backup/restore
+PLUGIN_DIR="/usr/lib/enigma2/python/Plugins/Extensions/$PLUGIN_NAME"
+BACKUP_DIR="$TMP_DIR/${PLUGIN_NAME}_backup"
+
 PKG_MANAGER=""
 PYTHON_VERSION=""
 FINAL_DEPENDS=""
@@ -46,22 +52,12 @@ is_pkg_installed() {
         opkg list-installed 2>/dev/null | grep -q "^$pkg[[:space:]-]" && return 0
         return 1
     fi
-
+    
     if [ "$PKG_MANAGER" = "apt" ]; then
         dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed" && return 0
         return 1
     fi
     return 1
-}
-
-restart_enigma2() {
-    log "[INFO] Restarting Enigma2 UI..."
-    sleep 2
-    if [ -f /usr/bin/systemctl ]; then
-        systemctl restart enigma2
-    else
-        init 4 && sleep 2 && init 3 || killall -9 enigma2 >/dev/null 2>&1
-    fi
 }
 
 echo "===================================================="
@@ -71,7 +67,7 @@ echo "===================================================="
 # 1. Detect Environment & Python Version
 if has_cmd opkg; then
     PKG_MANAGER="opkg"
-elif has_cmd apt-get; then
+    elif has_cmd apt-get; then
     PKG_MANAGER="apt"
 fi
 log "[INFO] Package manager detected: ${PKG_MANAGER:-None}"
@@ -79,7 +75,7 @@ log "[INFO] Package manager detected: ${PKG_MANAGER:-None}"
 if has_cmd python3; then
     PYTHON_VERSION="3"
     PY_PREFIX="python3-"
-elif has_cmd python; then
+    elif has_cmd python; then
     PYTHON_VERSION="2"
     PY_PREFIX="python-"
 fi
@@ -98,7 +94,7 @@ if [ -n "$FINAL_DEPENDS" ] && [ -n "$PKG_MANAGER" ]; then
     if [ "$PKG_MANAGER" = "opkg" ]; then
         log "[INFO] Updating opkg feeds..."
         opkg update >/dev/null 2>&1 || log "[WARN] opkg update failed, continuing..."
-    elif [ "$PKG_MANAGER" = "apt" ]; then
+        elif [ "$PKG_MANAGER" = "apt" ]; then
         log "[INFO] Updating apt feeds..."
         apt-get update >/dev/null 2>&1 || log "[WARN] apt update failed, continuing..."
     fi
@@ -114,7 +110,7 @@ if [ -n "$FINAL_DEPENDS" ]; then
             log "[INFO] Downloading and installing: $pkg"
             if [ "$PKG_MANAGER" = "opkg" ]; then
                 opkg install "$pkg" >/dev/null 2>&1
-            elif [ "$PKG_MANAGER" = "apt" ]; then
+                elif [ "$PKG_MANAGER" = "apt" ]; then
                 DEBIAN_FRONTEND=noninteractive apt-get install -y "$pkg" >/dev/null 2>&1
             fi
             
@@ -131,7 +127,22 @@ else
     log "[INFO] No dependencies specified in configuration. Skipping dependency phase."
 fi
 
-# 5. Download Plugin Archive
+# 5. Backup MVI Directories
+log "[INFO] Backing up existing MVI directories..."
+rm -rf "$BACKUP_DIR"
+mkdir -p "$BACKUP_DIR"
+
+if [ -d "$PLUGIN_DIR/backdrops_mvi" ]; then
+    cp -r "$PLUGIN_DIR/backdrops_mvi" "$BACKUP_DIR/"
+    log "[OK] Backdrops backed up."
+fi
+
+if [ -d "$PLUGIN_DIR/bootlogos_mvi" ]; then
+    cp -r "$PLUGIN_DIR/bootlogos_mvi" "$BACKUP_DIR/"
+    log "[OK] Bootlogos backed up."
+fi
+
+# 6. Download Plugin Archive
 log "[INFO] Downloading main plugin tree archive..."
 rm -f "$TMP_FILE"
 wget -q --no-check-certificate "$PLUGIN_URL" -O "$TMP_FILE"
@@ -142,7 +153,7 @@ if [ ! -s "$TMP_FILE" ]; then
     exit 1
 fi
 
-# 6. Extract directly to ROOT (/)
+# 7. Extract directly to ROOT (/)
 log "[INFO] Extracting payload contents to system paths..."
 tar -xzf "$TMP_FILE" -C /
 if [ $? -ne 0 ]; then
@@ -151,12 +162,29 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+# 8. Restore MVI Directories
+log "[INFO] Restoring MVI directories..."
+if [ -d "$BACKUP_DIR/backdrops_mvi" ]; then
+    # Ensure target directory exists in case the tar extraction completely removed it
+    mkdir -p "$PLUGIN_DIR/backdrops_mvi"
+    cp -rf "$BACKUP_DIR/backdrops_mvi/"* "$PLUGIN_DIR/backdrops_mvi/" 2>/dev/null
+    log "[OK] Backdrops restored."
+fi
+
+if [ -d "$BACKUP_DIR/bootlogos_mvi" ]; then
+    mkdir -p "$PLUGIN_DIR/bootlogos_mvi"
+    cp -rf "$BACKUP_DIR/bootlogos_mvi/"* "$PLUGIN_DIR/bootlogos_mvi/" 2>/dev/null
+    log "[OK] Bootlogos restored."
+fi
+
+# Cleanup
 rm -f "$TMP_FILE"
+rm -rf "$BACKUP_DIR"
 sync
 
 echo "===================================================="
 echo "          $PLUGIN_NAME INSTALLATION COMPLETE        "
 echo "===================================================="
+echo "[INFO] Please restart the GUI to apply changes."
 
-restart_enigma2
 exit 0
