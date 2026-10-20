@@ -19,6 +19,13 @@ PY_DEPENDS="requests core compression difflib json"
 SYS_DEPENDS=""
 # =========================================================================
 
+# Terminal Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m' # No Color
+
 # Dynamically construct the download link
 PLUGIN_URL="https://github.com/${USERNAME}/${REPO}/raw/refs/heads/main/main.tar.gz"
 
@@ -36,7 +43,14 @@ PYTHON_VERSION=""
 FINAL_DEPENDS=""
 
 log() {
-    echo "$1"
+    # Automatically colorize based on the log tag
+    case "$1" in
+        *\[INFO\]*) echo -e "${CYAN}$1${NC}" ;;
+        *\[OK\]*) echo -e "${GREEN}$1${NC}" ;;
+        *\[WARN\]*) echo -e "${YELLOW}$1${NC}" ;;
+        *\[ERROR\]*) echo -e "${RED}$1${NC}" ;;
+        *) echo -e "$1" ;;
+    esac
 }
 
 has_cmd() {
@@ -60,9 +74,9 @@ is_pkg_installed() {
     return 1
 }
 
-echo "===================================================="
-echo "         $PLUGIN_NAME INSTALLER UTILITY            "
-echo "===================================================="
+echo -e "${GREEN}====================================================${NC}"
+echo -e "${GREEN}         $PLUGIN_NAME INSTALLER UTILITY             ${NC}"
+echo -e "${GREEN}====================================================${NC}"
 
 # 1. Detect Environment & Python Version
 if has_cmd opkg; then
@@ -89,18 +103,7 @@ for dep in $SYS_DEPENDS; do
     FINAL_DEPENDS="$FINAL_DEPENDS $dep"
 done
 
-# 3. Update Package Feeds (Only if dependencies are requested)
-if [ -n "$FINAL_DEPENDS" ] && [ -n "$PKG_MANAGER" ]; then
-    if [ "$PKG_MANAGER" = "opkg" ]; then
-        log "[INFO] Updating opkg feeds..."
-        opkg update >/dev/null 2>&1 || log "[WARN] opkg update failed, continuing..."
-        elif [ "$PKG_MANAGER" = "apt" ]; then
-        log "[INFO] Updating apt feeds..."
-        apt-get update >/dev/null 2>&1 || log "[WARN] apt update failed, continuing..."
-    fi
-fi
-
-# 4. Check and Download Dependencies (Strict Mode)
+# 3. Check and Download Dependencies (Strict Mode)
 if [ -n "$FINAL_DEPENDS" ]; then
     log "[INFO] Verifying required dependencies..."
     for pkg in $FINAL_DEPENDS; do
@@ -127,7 +130,7 @@ else
     log "[INFO] No dependencies specified in configuration. Skipping dependency phase."
 fi
 
-# 5. Backup MVI Directories
+# 4. Backup MVI Directories
 log "[INFO] Backing up existing MVI directories..."
 rm -rf "$BACKUP_DIR"
 mkdir -p "$BACKUP_DIR"
@@ -142,7 +145,7 @@ if [ -d "$PLUGIN_DIR/bootlogos_mvi" ]; then
     log "[OK] Bootlogos backed up."
 fi
 
-# 6. Download Plugin Archive
+# 5. Download Plugin Archive
 log "[INFO] Downloading main plugin tree archive..."
 rm -f "$TMP_FILE"
 wget -q --no-check-certificate "$PLUGIN_URL" -O "$TMP_FILE"
@@ -153,7 +156,7 @@ if [ ! -s "$TMP_FILE" ]; then
     exit 1
 fi
 
-# 7. Extract directly to ROOT (/)
+# 6. Extract directly to ROOT (/)
 log "[INFO] Extracting payload contents to system paths..."
 tar -xzf "$TMP_FILE" -C /
 if [ $? -ne 0 ]; then
@@ -162,7 +165,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# 8. Restore MVI Directories
+# 7. Restore MVI Directories
 log "[INFO] Restoring MVI directories..."
 if [ -d "$BACKUP_DIR/backdrops_mvi" ]; then
     # Ensure target directory exists in case the tar extraction completely removed it
@@ -182,9 +185,8 @@ rm -f "$TMP_FILE"
 rm -rf "$BACKUP_DIR"
 sync
 
-echo "===================================================="
-echo "          $PLUGIN_NAME INSTALLATION COMPLETE        "
-echo "===================================================="
-echo "[INFO] Please restart the GUI to apply changes."
+echo -e "${GREEN}====================================================${NC}"
+echo -e "${GREEN}         $PLUGIN_NAME INSTALLATION COMPLETE         ${NC}"
+echo -e "${GREEN}====================================================${NC}"
 
 exit 0
